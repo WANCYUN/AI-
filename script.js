@@ -235,6 +235,11 @@ const elements = {
   timerStart: document.getElementById('timerStart'),
   timerReset: document.getElementById('timerReset'),
   timerStatus: document.getElementById('timerStatus'),
+  floatingTimer: document.getElementById('floatingTimer'),
+  floatingTimerDisplay: document.getElementById('floatingTimerDisplay'),
+  floatingTimerStatus: document.getElementById('floatingTimerStatus'),
+  floatingTimerToggle: document.getElementById('floatingTimerToggle'),
+  floatingTimerReset: document.getElementById('floatingTimerReset'),
   resultInput: document.getElementById('resultInput'),
   saveResultButton: document.getElementById('saveResultButton'),
   saveMessage: document.getElementById('saveMessage'),
@@ -398,7 +403,31 @@ function formatTime(totalSeconds) {
 }
 
 function updateTimerDisplay() {
-  elements.timerDisplay.textContent = formatTime(state.remainingSeconds);
+  const timeText = formatTime(state.remainingSeconds);
+  elements.timerDisplay.textContent = timeText;
+  elements.floatingTimerDisplay.textContent = timeText;
+}
+
+function updateTimerControls(statusText, isRunning = false) {
+  elements.timerStatus.textContent = statusText;
+  elements.timerStatus.classList.toggle('running', isRunning);
+  elements.floatingTimerStatus.textContent = statusText;
+  elements.floatingTimerStatus.classList.toggle('running', isRunning);
+  elements.timerStart.textContent = isRunning ? '暫停' : '開始計時';
+  elements.floatingTimerToggle.textContent = isRunning ? '暫停' : '開始';
+}
+
+function initFloatingTimer() {
+  const mainTimer = document.querySelector('.timer-card');
+  if (!mainTimer || !('IntersectionObserver' in window)) return;
+
+  const observer = new IntersectionObserver(([entry]) => {
+    const shouldFloat = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+    elements.floatingTimer.classList.toggle('visible', shouldFloat);
+    elements.floatingTimer.setAttribute('aria-hidden', String(!shouldFloat));
+  }, { threshold: 0.08 });
+
+  observer.observe(mainTimer);
 }
 
 function setTimerPreset(minutes, button) {
@@ -416,16 +445,14 @@ function startOrPauseTimer() {
   }
   if (state.remainingSeconds <= 0) resetTimer();
   state.timerRunning = true;
-  elements.timerStart.textContent = '暫停';
-  elements.timerStatus.textContent = '專注中';
-  elements.timerStatus.classList.add('running');
+  updateTimerControls('專注中', true);
   state.timerId = window.setInterval(() => {
     state.remainingSeconds -= 1;
     updateTimerDisplay();
     if (state.remainingSeconds <= 0) {
       pauseTimer();
-      elements.timerStatus.textContent = '完成';
-      elements.timerDisplay.textContent = '00:00:00';
+      updateTimerControls('完成', false);
+      updateTimerDisplay();
     }
   }, 1000);
 }
@@ -434,18 +461,17 @@ function pauseTimer() {
   if (state.timerId) window.clearInterval(state.timerId);
   state.timerId = null;
   state.timerRunning = false;
-  elements.timerStart.textContent = '開始計時';
   if (state.remainingSeconds > 0) {
-    elements.timerStatus.textContent = '已暫停';
-    elements.timerStatus.classList.remove('running');
+    updateTimerControls('已暫停', false);
+  } else {
+    updateTimerControls('完成', false);
   }
 }
 
 function resetTimer() {
   pauseTimer();
   state.remainingSeconds = state.selectedMinutes * 60;
-  elements.timerStatus.textContent = '尚未開始';
-  elements.timerStatus.classList.remove('running');
+  updateTimerControls('尚未開始', false);
   updateTimerDisplay();
 }
 
@@ -457,6 +483,8 @@ function bindEvents() {
   elements.clearResultsButton.addEventListener('click', clearResults);
   elements.timerStart.addEventListener('click', startOrPauseTimer);
   elements.timerReset.addEventListener('click', resetTimer);
+  elements.floatingTimerToggle.addEventListener('click', startOrPauseTimer);
+  elements.floatingTimerReset.addEventListener('click', resetTimer);
   document.querySelectorAll('.time-presets button').forEach(button => {
     button.addEventListener('click', () => setTimerPreset(Number(button.dataset.minutes), button));
   });
@@ -466,7 +494,9 @@ function init() {
   renderTools();
   refreshApp();
   updateTimerDisplay();
+  updateTimerControls('尚未開始', false);
   bindEvents();
+  initFloatingTimer();
   // 每次重新進入仍保留 START 首頁，符合「第一個畫面先出現 START」的需求。
 }
 
