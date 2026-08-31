@@ -7,7 +7,6 @@
   <title>AI Learning Plan｜每日 AI 學習工作計畫</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-  <!-- Trigger GitHub Pages deployment -->
 <body>
   <!-- 首次進入畫面：不涉及登入驗證，只作為學習計畫入口。 -->
   <section class="start-screen" id="startScreen" aria-labelledby="startTitle">
@@ -207,6 +206,20 @@
         </div>
       </section>
     </main>
+
+    <!-- 浮動計時器：捲離原本計時卡後自動顯示，並與主計時器同步。 -->
+    <aside class="floating-timer" id="floatingTimer" aria-label="浮動專注計時器" aria-hidden="true">
+      <div class="floating-timer__main">
+        <span class="floating-timer__label">FOCUS TIMER</span>
+        <strong class="floating-timer__display" id="floatingTimerDisplay">01:30:00</strong>
+        <span class="floating-timer__status" id="floatingTimerStatus">尚未開始</span>
+      </div>
+      <div class="floating-timer__actions">
+        <button class="floating-timer__button primary" id="floatingTimerToggle" type="button">開始</button>
+        <button class="floating-timer__button" id="floatingTimerReset" type="button">重設</button>
+        <a class="floating-timer__back" href="#today" aria-label="回到完整計時器">↑</a>
+      </div>
+    </aside>
 
     <footer>
       <p><strong>AI Learning Plan</strong>｜讓學習直接連結工作成果</p>
