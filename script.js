@@ -292,10 +292,12 @@ function renderStepChecklist(item, finishedAll = false) {
   const steps = getStepItems(item);
   const checked = getStepState(item.day, steps.length);
   elements.dailyStepChecklist.innerHTML = steps.map((text, index) => `
-    <label class="step-check-item ${checked[index] ? 'checked' : ''} ${index === steps.length - 1 ? 'final-step' : ''}">
-      <input type="checkbox" data-step-index="${index}" ${checked[index] ? 'checked' : ''}>
-      <span>${escapeHtml(text)}</span>
-    </label>`).join('');
+    <li class="step-check-item ${checked[index] ? 'checked' : ''} ${index === steps.length - 1 ? 'final-step' : ''}">
+      <label>
+        <input type="checkbox" data-step-index="${index}" ${checked[index] ? 'checked' : ''}>
+        <span>${escapeHtml(text)}</span>
+      </label>
+    </li>`).join('');
   const count = checked.filter(Boolean).length;
   elements.stepProgressText.textContent = `${count} / ${steps.length}`;
   const allDone = count === steps.length;
