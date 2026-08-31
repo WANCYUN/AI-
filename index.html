@@ -52,6 +52,19 @@
         <div class="hero-copy">
           <p class="eyebrow">TODAY'S MISSION</p>
           <div class="day-badge" id="dayBadge">DAY 01</div>
+
+          <section class="step-check-card" aria-labelledby="stepCheckTitle">
+            <div class="step-check-card__heading">
+              <div>
+                <span class="step-check-card__label">TODAY'S CHECKLIST</span>
+                <h3 id="stepCheckTitle">今日完成確認</h3>
+              </div>
+              <strong id="stepProgressText">0 / 4</strong>
+            </div>
+            <div class="step-check-list" id="dailyStepChecklist"></div>
+            <p class="step-check-hint" id="stepCheckHint">依序勾選完成項目，確認今天每個學習步驟都有實際完成。</p>
+          </section>
+
           <h2 id="todayTitle">AI 基礎與工作任務拆解</h2>
           <p id="todaySummary">先建立正確的 AI 使用觀念，學會把模糊工作轉成清楚可執行的提示詞。</p>
 
@@ -84,6 +97,15 @@
             <button type="button" data-minutes="60">60 分</button>
             <button class="active" type="button" data-minutes="90">90 分</button>
             <button type="button" data-minutes="120">120 分</button>
+          </div>
+          <div class="custom-time-control">
+            <label for="customMinutes">自訂今日時間</label>
+            <div class="custom-time-row">
+              <input id="customMinutes" type="number" min="10" max="360" step="5" inputmode="numeric" value="90" aria-describedby="customTimeHint">
+              <span>分鐘</span>
+              <button class="ghost-button" id="applyCustomTime" type="button">套用今日</button>
+            </div>
+            <small id="customTimeHint">可輸入 10–360 分鐘；套用後會同步更新今日計畫與下方工作計畫表。</small>
           </div>
           <div class="timer-actions">
             <button class="primary-button" id="timerStart" type="button">開始計時</button>
@@ -145,7 +167,7 @@
           <div>
             <p class="eyebrow">20-DAY ROADMAP</p>
             <h2>AI 學習工作計畫表</h2>
-            <p>每完成一天，系統會自動把下一個未完成項目分配為「今日任務」。</p>
+            <p>可自行勾選完成／取消完成，時間欄也可直接修改；系統會把下一個未完成項目分配為「今日任務」。</p>
           </div>
           <div class="progress-summary">
             <strong id="progressPercent">0%</strong>
@@ -157,7 +179,7 @@
           <table class="roadmap-table">
             <thead>
               <tr>
-                <th>進度</th>
+                <th>完成</th>
                 <th>主題</th>
                 <th>AI 工具</th>
                 <th>實作成果</th>
