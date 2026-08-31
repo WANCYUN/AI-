@@ -197,12 +197,16 @@ const tools = [
 const storageKeys = {
   started: 'aiLearningStarted',
   completed: 'aiLearningCompletedDays',
-  results: 'aiLearningResults'
+  results: 'aiLearningResults',
+  stepProgress: 'aiLearningStepProgress',
+  durationOverrides: 'aiLearningDurationOverrides'
 };
 
 const state = {
   completed: readJson(storageKeys.completed, []),
   results: readJson(storageKeys.results, []),
+  stepProgress: readJson(storageKeys.stepProgress, {}),
+  durationOverrides: readJson(storageKeys.durationOverrides, {}),
   selectedMinutes: 90,
   remainingSeconds: 90 * 60,
   timerId: null,
@@ -220,6 +224,9 @@ const elements = {
   todayDuration: document.getElementById('todayDuration'),
   todayTool: document.getElementById('todayTool'),
   todayDeliverable: document.getElementById('todayDeliverable'),
+  dailyStepChecklist: document.getElementById('dailyStepChecklist'),
+  stepProgressText: document.getElementById('stepProgressText'),
+  stepCheckHint: document.getElementById('stepCheckHint'),
   learningPoints: document.getElementById('learningPoints'),
   todayCase: document.getElementById('todayCase'),
   practicePrompt: document.getElementById('practicePrompt'),
@@ -235,6 +242,8 @@ const elements = {
   timerStart: document.getElementById('timerStart'),
   timerReset: document.getElementById('timerReset'),
   timerStatus: document.getElementById('timerStatus'),
+  customMinutes: document.getElementById('customMinutes'),
+  applyCustomTime: document.getElementById('applyCustomTime'),
   floatingTimer: document.getElementById('floatingTimer'),
   floatingTimerDisplay: document.getElementById('floatingTimerDisplay'),
   floatingTimerStatus: document.getElementById('floatingTimerStatus'),
@@ -265,15 +274,108 @@ function getCurrentPlan() {
   return learningPlan.find(item => !state.completed.includes(item.day)) || learningPlan[learningPlan.length - 1];
 }
 
+function getDuration(item) {
+  const override = Number(state.durationOverrides[item.day]);
+  return Number.isFinite(override) && override >= 10 && override <= 360 ? override : item.duration;
+}
+
+function getStepItems(item) {
+  return [...item.points, `完成今日成果：${item.deliverable}`];
+}
+
+function getStepState(day, stepCount) {
+  const saved = Array.isArray(state.stepProgress[day]) ? state.stepProgress[day] : [];
+  return Array.from({ length: stepCount }, (_, index) => Boolean(saved[index]));
+}
+
+function renderStepChecklist(item, finishedAll = false) {
+  const steps = getStepItems(item);
+  const checked = getStepState(item.day, steps.length);
+  elements.dailyStepChecklist.innerHTML = steps.map((text, index) => `
+    <label class="step-check-item ${checked[index] ? 'checked' : ''} ${index === steps.length - 1 ? 'final-step' : ''}">
+      <input type="checkbox" data-step-index="${index}" ${checked[index] ? 'checked' : ''}>
+      <span>${escapeHtml(text)}</span>
+    </label>`).join('');
+  const count = checked.filter(Boolean).length;
+  elements.stepProgressText.textContent = `${count} / ${steps.length}`;
+  const allDone = count === steps.length;
+  elements.stepCheckHint.textContent = allDone
+    ? '今日步驟已全部確認完成，可標記本日完成。'
+    : `尚有 ${steps.length - count} 項未確認；可依實際進度逐項勾選。`;
+  elements.stepCheckHint.classList.toggle('complete', allDone);
+}
+
+function setStepChecked(day, index, checked) {
+  const item = learningPlan.find(plan => plan.day === day);
+  if (!item) return;
+  const steps = getStepItems(item);
+  const progress = getStepState(day, steps.length);
+  progress[index] = checked;
+  state.stepProgress[day] = progress;
+  saveJson(storageKeys.stepProgress, state.stepProgress);
+  if (getCurrentPlan().day === day) renderStepChecklist(item, state.completed.length === learningPlan.length);
+}
+
+function toggleDayCompletion(day, checked) {
+  const wasCurrentDay = getCurrentPlan().day;
+  if (checked && !state.completed.includes(day)) state.completed.push(day);
+  if (!checked) state.completed = state.completed.filter(value => value !== day);
+  state.completed.sort((a, b) => a - b);
+  saveJson(storageKeys.completed, state.completed);
+  refreshApp();
+  const newCurrentDay = getCurrentPlan().day;
+  if (wasCurrentDay !== newCurrentDay && !state.timerRunning) syncTimerToCurrentPlan();
+}
+
+function updateDuration(day, minutes, syncTimer = false) {
+  const value = Math.round(Number(minutes));
+  if (!Number.isFinite(value) || value < 10 || value > 360) return false;
+  state.durationOverrides[day] = value;
+  saveJson(storageKeys.durationOverrides, state.durationOverrides);
+  const current = getCurrentPlan();
+  if (current.day === day) {
+    elements.todayDuration.textContent = `${value} 分鐘`;
+    elements.customMinutes.value = String(value);
+    if (syncTimer && !state.timerRunning) {
+      state.selectedMinutes = value;
+      state.remainingSeconds = value * 60;
+      document.querySelectorAll('.time-presets button').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.minutes) === value);
+      });
+      updateTimerControls('尚未開始', false);
+      updateTimerDisplay();
+    }
+  }
+  renderRoadmap();
+  return true;
+}
+
+function syncTimerToCurrentPlan() {
+  const current = getCurrentPlan();
+  const minutes = getDuration(current);
+  pauseTimer();
+  state.selectedMinutes = minutes;
+  state.remainingSeconds = minutes * 60;
+  elements.customMinutes.value = String(minutes);
+  document.querySelectorAll('.time-presets button').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.minutes) === minutes);
+  });
+  updateTimerControls('尚未開始', false);
+  updateTimerDisplay();
+}
+
 function renderToday() {
   const item = getCurrentPlan();
   const finishedAll = state.completed.length === learningPlan.length;
+  const duration = getDuration(item);
   elements.dayBadge.textContent = finishedAll ? '20 DAYS COMPLETE' : `DAY ${String(item.day).padStart(2, '0')} · ${item.phase}`;
   elements.todayTitle.textContent = finishedAll ? '20 天 AI 學習計畫已完成' : item.title;
   elements.todaySummary.textContent = finishedAll ? '你已完成本階段全部任務。可以回顧成果紀錄，挑選下一階段最值得深化的能力。' : item.summary;
-  elements.todayDuration.textContent = finishedAll ? '回顧 30–60 分鐘' : `${item.duration} 分鐘`;
+  elements.todayDuration.textContent = finishedAll ? '回顧 30–60 分鐘' : `${duration} 分鐘`;
   elements.todayTool.textContent = item.tool;
   elements.todayDeliverable.textContent = finishedAll ? '整理成果作品集' : item.deliverable;
+  elements.customMinutes.value = String(duration);
+  renderStepChecklist(item, finishedAll);
   elements.learningPoints.innerHTML = item.points.map(point => `<li>${point}</li>`).join('');
   elements.todayCase.textContent = item.caseText;
   elements.practicePrompt.textContent = item.prompt;
@@ -288,13 +390,24 @@ function renderRoadmap() {
   elements.roadmapBody.innerHTML = learningPlan.map(item => {
     const done = state.completed.includes(item.day);
     const isCurrent = !done && item.day === current.day;
+    const duration = getDuration(item);
     return `
       <tr class="${done ? 'done' : ''} ${isCurrent ? 'current' : ''}">
-        <td><div class="day-cell"><span class="day-check">✓</span>DAY ${String(item.day).padStart(2, '0')}</div></td>
+        <td>
+          <label class="roadmap-check-wrap">
+            <input class="roadmap-check" type="checkbox" data-day-complete="${item.day}" ${done ? 'checked' : ''} aria-label="標記 DAY ${String(item.day).padStart(2, '0')} ${done ? '未完成' : '完成'}">
+            <span>DAY ${String(item.day).padStart(2, '0')}</span>
+          </label>
+        </td>
         <td><strong>${item.title}</strong><span class="phase-tag">${item.phase}</span></td>
         <td>${item.tool}</td>
         <td>${item.deliverable}</td>
-        <td>${item.duration} 分</td>
+        <td>
+          <label class="roadmap-duration-control">
+            <input class="roadmap-duration-input" type="number" min="10" max="360" step="5" value="${duration}" data-duration-day="${item.day}" aria-label="DAY ${String(item.day).padStart(2, '0')} 學習分鐘數">
+            <span>分</span>
+          </label>
+        </td>
       </tr>`;
   }).join('');
 }
@@ -362,11 +475,14 @@ function showStart() {
 function completeCurrentDay() {
   const item = getCurrentPlan();
   if (state.completed.includes(item.day)) return;
-  state.completed.push(item.day);
-  state.completed.sort((a, b) => a - b);
-  saveJson(storageKeys.completed, state.completed);
-  refreshApp();
-  resetTimer();
+  const steps = getStepItems(item);
+  const checkedCount = getStepState(item.day, steps.length).filter(Boolean).length;
+  if (checkedCount < steps.length) {
+    const confirmed = window.confirm(`今日還有 ${steps.length - checkedCount} 個步驟尚未勾選確認，仍要標記 DAY ${String(item.day).padStart(2, '0')} 完成嗎？`);
+    if (!confirmed) return;
+  }
+  toggleDayCompletion(item.day, true);
+  syncTimerToCurrentPlan();
   document.getElementById('today').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -434,6 +550,7 @@ function setTimerPreset(minutes, button) {
   if (state.timerRunning) return;
   state.selectedMinutes = minutes;
   state.remainingSeconds = minutes * 60;
+  elements.customMinutes.value = String(minutes);
   document.querySelectorAll('.time-presets button').forEach(btn => btn.classList.toggle('active', btn === button));
   updateTimerDisplay();
 }
@@ -475,6 +592,19 @@ function resetTimer() {
   updateTimerDisplay();
 }
 
+function applyCustomTime() {
+  const current = getCurrentPlan();
+  const minutes = Math.round(Number(elements.customMinutes.value));
+  if (!Number.isFinite(minutes) || minutes < 10 || minutes > 360) {
+    elements.customMinutes.setCustomValidity('請輸入 10 到 360 分鐘之間的時間。');
+    elements.customMinutes.reportValidity();
+    return;
+  }
+  elements.customMinutes.setCustomValidity('');
+  if (state.timerRunning) pauseTimer();
+  updateDuration(current.day, minutes, true);
+}
+
 function bindEvents() {
   elements.startButton.addEventListener('click', enterApp);
   elements.backToStart.addEventListener('click', showStart);
@@ -483,14 +613,47 @@ function bindEvents() {
   elements.clearResultsButton.addEventListener('click', clearResults);
   elements.timerStart.addEventListener('click', startOrPauseTimer);
   elements.timerReset.addEventListener('click', resetTimer);
+  elements.applyCustomTime.addEventListener('click', applyCustomTime);
+  elements.customMinutes.addEventListener('keydown', event => {
+    if (event.key === 'Enter') applyCustomTime();
+  });
   elements.floatingTimerToggle.addEventListener('click', startOrPauseTimer);
   elements.floatingTimerReset.addEventListener('click', resetTimer);
   document.querySelectorAll('.time-presets button').forEach(button => {
     button.addEventListener('click', () => setTimerPreset(Number(button.dataset.minutes), button));
   });
+
+  elements.dailyStepChecklist.addEventListener('change', event => {
+    const checkbox = event.target.closest('input[data-step-index]');
+    if (!checkbox) return;
+    const item = getCurrentPlan();
+    setStepChecked(item.day, Number(checkbox.dataset.stepIndex), checkbox.checked);
+  });
+
+  elements.roadmapBody.addEventListener('change', event => {
+    const completeCheckbox = event.target.closest('input[data-day-complete]');
+    if (completeCheckbox) {
+      toggleDayCompletion(Number(completeCheckbox.dataset.dayComplete), completeCheckbox.checked);
+      return;
+    }
+    const durationInput = event.target.closest('input[data-duration-day]');
+    if (durationInput) {
+      const day = Number(durationInput.dataset.durationDay);
+      const minutes = Math.round(Number(durationInput.value));
+      if (!updateDuration(day, minutes, getCurrentPlan().day === day)) {
+        durationInput.value = String(getDuration(learningPlan.find(item => item.day === day)));
+        durationInput.setCustomValidity('請輸入 10 到 360 分鐘之間的時間。');
+        durationInput.reportValidity();
+        durationInput.setCustomValidity('');
+      }
+    }
+  });
 }
 
 function init() {
+  const initialMinutes = getDuration(getCurrentPlan());
+  state.selectedMinutes = initialMinutes;
+  state.remainingSeconds = initialMinutes * 60;
   renderTools();
   refreshApp();
   updateTimerDisplay();
